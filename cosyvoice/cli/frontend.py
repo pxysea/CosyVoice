@@ -54,7 +54,7 @@ class CosyVoiceFrontEnd:
                                                                      providers=["CUDAExecutionProvider" if torch.cuda.is_available() else
                                                                                 "CPUExecutionProvider"])
         if os.path.exists(spk2info):
-            self.spk2info = torch.load(spk2info, map_location=self.device)
+            self.spk2info = torch.load(spk2info, map_location=self.device,weights_only=True)
         else:
             self.spk2info = {}
         self.instruct = instruct
