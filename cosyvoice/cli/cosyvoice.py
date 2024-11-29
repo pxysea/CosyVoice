@@ -22,7 +22,13 @@ from cosyvoice.utils.file_utils import logging
 
 
 class CosyVoice:
+    
 
+    default_speaker_keys = ["flow_embedding", "llm_embedding", "llm_prompt_speech_token",
+                            "llm_prompt_speech_token_len", "flow_prompt_speech_token",
+                            "flow_prompt_speech_token_len", "prompt_speech_feat",
+                            "prompt_speech_feat_len", "prompt_text", "prompt_text_len"]
+    
     def __init__(self, model_dir, load_jit=True, load_onnx=False, fp16=True):
         instruct = True if '-Instruct' in model_dir else False
         self.model_dir = model_dir
@@ -52,8 +58,13 @@ class CosyVoice:
     def list_avaliable_spks(self):
         spks = list(self.frontend.spk2info.keys())
         return spks
+    
+    def update_model_input(self,model_input, newspk, keys):
+        for key in keys:
+            if key in newspk:
+                model_input[key] = newspk[key]
 
-    def inference_sft(self, tts_text, spk_id, stream=False, speed=1.0):
+    def inference_sft1(self, tts_text, spk_id, stream=False, speed=1.0):
         for i in tqdm(self.frontend.text_normalize(tts_text, split=True)):
             model_input = self.frontend.frontend_sft(i, spk_id)
             start_time = time.time()
@@ -62,6 +73,52 @@ class CosyVoice:
                 speech_len = model_output['tts_speech'].shape[1] / 22050
                 logging.info('yield speech len {}, rtf {}'.format(speech_len, (time.time() - start_time) / speech_len))
                 yield model_output
+                start_time = time.time()
+
+    def inference_sft(self, tts_text, spk_id, stream=False, speed=1.0, speaker_data=None,update_keys=None):
+        """
+        合成方法，逐步返回音频段数据及其对应信息。
+
+        参数:
+            tts_text (str): 输入文本，待合成的内容。
+            spk_id (str): 说话人 ID，支持默认预训练音色（如 '中文女', '中文男'）。
+            stream (bool): 是否以流式方式返回合成结果。
+            speed (float): 语速调整参数，默认值为 1.0（正常速度）。
+            speaker_data (Optional[dict]): 如果提供，应该是 `torch.load()` 的返回值，表示自定义音色模型。
+                                    通常是一个包含模型权重和特定参数的字典，例如:
+                                    {
+                                        "flow_embedding": Tensor,
+                                        "llm_embedding": Tensor,
+                                        ...
+                                    }
+
+        返回:
+            generator: 每次生成一个字典，包含以下键值对:
+                - "audio_chunk": Tensor, 当前生成的音频段。
+                - "subtitle": dict, 对应的字幕信息，包含开始时间、结束时间和文本内容。
+        """
+        # 文本归一化
+        text_segments = self.frontend.text_normalize(tts_text, split=True)
+        start_time = time.time()
+        for segment in tqdm(text_segments):
+            # 模型输入处理
+            if speaker_data:
+                model_input = self.frontend.frontend_sft(segment, spk_id)
+                self.update_model_input(model_input,speaker_data,self.default_speaker_keys)
+            else:
+                model_input = self.frontend.frontend_sft(segment, spk_id)
+
+            if update_keys:
+                self.update_model_input(model_input,speaker_data,update_keys)
+
+            # 合成音频并处理输出
+            for model_output in self.model.tts(**model_input, stream=stream, speed=speed):
+                tts_speech = model_output['tts_speech']  # 当前段的音频数据
+                
+                yield {                    
+                    "tts_speech": tts_speech,  # 音频段数据
+                    "text_chunk": segment
+                }
                 start_time = time.time()
 
     def inference_zero_shot(self, tts_text, prompt_text, prompt_speech_16k, stream=False, speed=1.0):
