@@ -17,6 +17,7 @@
 import os
 import json
 import torch
+import soundfile as sf
 import torchaudio
 import logging
 logging.getLogger('matplotlib').setLevel(logging.WARNING)
@@ -42,7 +43,27 @@ def read_json_lists(list_file):
 
 
 def load_wav(wav, target_sr, min_sr=16000):
-    speech, sample_rate = torchaudio.load(wav, backend='soundfile')
+    # 使用 soundfile 直接读取，绕过 torchaudio 对 TorchCodec 的依赖
+    speech, sample_rate = sf.read(wav, dtype='float32')
+    print(
+        f"load_wav: original_sr={sample_rate}, "
+        f"target_sr={target_sr}"
+    )
+    print(
+        f"load_wav: file={wav}, "
+        f"sample_rate={sample_rate}, "
+        f"shape={speech.shape}, "
+        f"min={speech.min():.5f}, "
+        f"max={speech.max():.5f}"
+    )
+    # soundfile 返回: 单声道为 (时间,)，多声道为 (时间, 通道)
+    if speech.ndim == 1:
+        # 单声道，直接加通道维度
+        speech = torch.from_numpy(speech).unsqueeze(0).float()  # -> (1, 时间)
+    else:
+        # 多声道，(时间, 通道) -> (通道, 时间)
+        speech = torch.from_numpy(speech).permute(1, 0).float()  # -> (通道, 时间)
+    # 多通道取平均，保持 (1, 时间)
     speech = speech.mean(dim=0, keepdim=True)
     if sample_rate != target_sr:
         assert sample_rate >= min_sr, 'wav sample rate {} must be greater than {}'.format(sample_rate, target_sr)

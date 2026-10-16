@@ -226,7 +226,7 @@ class TransformerLM(torch.nn.Module):
 class Qwen2Encoder(torch.nn.Module):
     def __init__(self, pretrain_path):
         super().__init__()
-        self.model = Qwen2ForCausalLM.from_pretrained(pretrain_path)
+        self.model = Qwen2ForCausalLM.from_pretrained(pretrain_path).float()
 
     def forward(self, xs: torch.Tensor, xs_lens: torch.Tensor):
         T = xs.size(1)
@@ -240,10 +240,10 @@ class Qwen2Encoder(torch.nn.Module):
         return outs.hidden_states[-1], masks.unsqueeze(1)
 
     def forward_one_step(self, xs, masks, cache=None):
-        input_masks = masks[:, -1, :]
+        # input_masks = masks[:, -1, :]
         outs = self.model(
             inputs_embeds=xs,
-            attention_mask=input_masks,
+            attention_mask=None,      # 原来是 masks[:, -1, :]
             output_hidden_states=True,
             return_dict=True,
             use_cache=True,
