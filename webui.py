@@ -75,8 +75,9 @@ def generate_audio(tts_text, mode_checkbox_group, sft_dropdown, prompt_text, pro
         if prompt_wav is None:
             gr.Warning('prompt音频为空，您是否忘记输入prompt音频？')
             yield (cosyvoice.sample_rate, default_data)
-        if torchaudio.info(prompt_wav).sample_rate < prompt_sr:
-            gr.Warning('prompt音频采样率{}低于{}'.format(torchaudio.info(prompt_wav).sample_rate, prompt_sr))
+        prompt_wav_sr = librosa.get_samplerate(prompt_wav)
+        if prompt_wav_sr < prompt_sr:
+            gr.Warning('prompt音频采样率{}低于{}'.format(prompt_wav_sr, prompt_sr))
             yield (cosyvoice.sample_rate, default_data)
     # sft mode only use sft_dropdown
     if mode_checkbox_group in ['预训练音色']:
@@ -158,10 +159,10 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--port',
                         type=int,
-                        default=8000)
+                        default=8007)
     parser.add_argument('--model_dir',
                         type=str,
-                        default='pretrained_models/CosyVoice2-0.5B',
+                        default='pretrained_models/Fun-CosyVoice3-0.5B',
                         help='local path or modelscope repo id')
     args = parser.parse_args()
     cosyvoice = AutoModel(model_dir=args.model_dir)

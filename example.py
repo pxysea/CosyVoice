@@ -114,7 +114,7 @@ def save_wav(path, speech, sample_rate):
     )
 
     sf.write(
-        path,
+        f'output/{path}',
         audio,
         sample_rate,
         subtype="PCM_16"

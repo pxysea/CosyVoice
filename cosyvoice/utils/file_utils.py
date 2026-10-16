@@ -45,17 +45,17 @@ def read_json_lists(list_file):
 def load_wav(wav, target_sr, min_sr=16000):
     # 使用 soundfile 直接读取，绕过 torchaudio 对 TorchCodec 的依赖
     speech, sample_rate = sf.read(wav, dtype='float32')
-    print(
-        f"load_wav: original_sr={sample_rate}, "
-        f"target_sr={target_sr}"
-    )
-    print(
-        f"load_wav: file={wav}, "
-        f"sample_rate={sample_rate}, "
-        f"shape={speech.shape}, "
-        f"min={speech.min():.5f}, "
-        f"max={speech.max():.5f}"
-    )
+    # print(
+    #     f"load_wav: original_sr={sample_rate}, "
+    #     f"target_sr={target_sr}"
+    # )
+    # print(
+    #     f"load_wav: file={wav}, "
+    #     f"sample_rate={sample_rate}, "
+    #     f"shape={speech.shape}, "
+    #     f"min={speech.min():.5f}, "
+    #     f"max={speech.max():.5f}"
+    # )
     # soundfile 返回: 单声道为 (时间,)，多声道为 (时间, 通道)
     if speech.ndim == 1:
         # 单声道，直接加通道维度

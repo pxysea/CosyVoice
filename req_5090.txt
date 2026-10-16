@@ -1,33 +1,61 @@
---extra-index-url https://download.pytorch.org/whl/cu121
---extra-index-url https://aiinfra.pkgs.visualstudio.com/PublicPackages/_packaging/onnxruntime-cuda-12/pypi/simple/ # https://github.com/microsoft/onnxruntime/issues/21684
+# ======================================================================
+# CosyVoice3 (Fun-CosyVoice3-0.5B-2512) —— 新版依赖栈
+# 目标环境: Ubuntu 24 / Python 3.12 / CUDA 12.8 / NVIDIA RTX 5090 (sm_120)
+#
+# 版本取自实际跑通的 cosyvoice 环境（需配合 llm.py 补丁，见安装说明），
+# 仅 onnxruntime-gpu 取 1.23.2（该环境原为 1.21.1，1.23.2 来自另一个正常环境）。
+# 已在 Python 3.12 下用 pip --dry-run 做过依赖解析，无版本冲突。
+# 官方 requirements.txt 是旧栈: torch 2.3.1 / transformers 4.51.3 / numpy 1.26.4。
+# ======================================================================
+
+--extra-index-url https://download.pytorch.org/whl/cu128
+
+# ---- PyTorch（必须 cu128 及以上构建，Blackwell / RTX 50 系才有 sm_120 kernel）----
+torch==2.11.0+cu128
+torchaudio==2.11.0+cu128
+
+# ---- LLM 部分（transformers 5.x 必须打补丁，否则语音内容错误、断续）----
+transformers==5.20.0
+x-transformers==2.31.7
+
+# ---- 音频 / 数值 ----
+numpy==2.5.4
+soundfile==0.14.0
+librosa==1.0.0
+openai-whisper==20250625
+pyworld==0.3.5
+onnxruntime-gpu==1.26.0    # 1.27 之前的 PyPI 版按 CUDA 12.8 构建，与 cu128 的 torch 配套
+
+# ---- 文本前端（缺少时日志会出现 "no frontend is avaliable"）----
+wetext==0.1.8
+inflect==7.5.0
+
+# ---- 模型 / 配置 / 框架 ----
 conformer==0.3.2
-diffusers==0.29.0
-fastapi==0.115.6
-fastapi-cli==0.0.4
-gdown==5.1.0
-gradio==5.4.0
-grpcio==1.57.0
-grpcio-tools==1.57.0
-hydra-core==1.3.2
+diffusers==0.41.0
 HyperPyYAML==1.2.3
-inflect==7.3.1
-librosa==0.10.2
-lightning==2.2.4
-matplotlib==3.7.5
-modelscope==1.20.0
-networkx==3.1
-numpy==1.26.4
-omegaconf==2.3.0
-onnx==1.16.0
-protobuf==4.25
-pyarrow==18.1.0
-pydantic==2.7.0
-pyworld==0.3.4
-rich==13.7.1
-soundfile==0.12.1
-tensorboard==2.14.0
-transformers==4.51.3
-x-transformers==2.11.24
-uvicorn==0.30.0
-wetext==0.0.4
+hydra-core==1.3.2
+omegaconf==2.3.1
+lightning==2.6.6
+modelscope==1.40.2
+networkx==3.6.1
+matplotlib==3.11.2
+pyarrow==26.0.0
+protobuf==7.36.2
+pydantic==2.14.1
+rich==15.0.0
+gdown==6.4.2
 wget==3.2
+
+# ---- 服务端（runtime/python 的 fastapi / grpc 服务）----
+fastapi==0.143.1
+uvicorn==0.54.0
+grpcio==1.84.0
+
+# ---- 可选，按需取消注释 ----
+# gradio                      # 运行 webui.py 才需要
+# tensorboard                 # 训练才需要
+# deepspeed                   # 训练才需要
+# onnx                        # 模型导出才需要
+# grpcio-tools                # 重新生成 grpc 代码才需要
+# torchcodec                  # 仅当你不修改 load_wav（见安装说明）
