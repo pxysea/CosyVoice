@@ -51,4 +51,6 @@ pretrained_models/*
 *_pb2.py
 *.tar
 test
-output
+outputs/
+voices/
+spk_library/
