@@ -688,6 +688,11 @@ def init_runtime(args):
     cls = type(cosyvoice).__name__
     MODEL_KIND = {'CosyVoice3': 'v3', 'CosyVoice2': 'v2'}.get(cls, 'v1')
     SAMPLE_RATE = cosyvoice.sample_rate
+    if getattr(args, 'llm', 'base') == 'rl':
+        # 官方 RL 版 LLM 权重：字错率更低，音色相似度略低（见模型 README 基准）
+        rl_path = os.path.join(cosyvoice.model_dir, 'llm.rl.pt')
+        cosyvoice.model.llm.load_state_dict(torch.load(rl_path, map_location=cosyvoice.model.device, weights_only=True), strict=True)
+        logging.info('已切换 LLM 权重: {}'.format(rl_path))
     PINYIN_VOCAB = polyphone.pinyin_vocab(cosyvoice.frontend.tokenizer) if MODEL_KIND == 'v3' else set()
     # 音色与模型绑定：按模型目录名分开存放
     LIB_DIR = os.path.join(os.path.abspath(args.library_dir), os.path.basename(os.path.normpath(args.model_dir)))
@@ -705,6 +710,7 @@ if __name__ == '__main__':
     parser.add_argument('--model_dir', type=str, default='pretrained_models/Fun-CosyVoice3-0.5B',
                         help='local path or modelscope repo id')
     parser.add_argument('--fp16', action='store_true', help='使用 fp16 推理（请先确认 fp32 下合成正常）')
+    parser.add_argument('--llm', choices=['base', 'rl'], default='base', help='CosyVoice3 LLM 权重：base=llm.pt, rl=llm.rl.pt')
     parser.add_argument('--library_dir', type=str, default=os.path.join(ROOT_DIR, 'spk_library'), help='音色库目录')
     parser.add_argument('--output_dir', type=str, default=os.path.join(ROOT_DIR, 'outputs'), help='合成音频输出目录')
     parser.add_argument('--share', action='store_true', help='生成 gradio 公网分享链接')

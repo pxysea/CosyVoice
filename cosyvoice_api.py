@@ -9,6 +9,7 @@
 import argparse
 import io
 import json
+import logging
 import os
 import random
 import sys
@@ -204,13 +205,29 @@ def create_app(args) -> FastAPI:
     return gr.mount_gradio_app(app, W.build_ui(), path="/ui")
 
 
+class _QuietHealth(logging.Filter):
+    """访问日志里不记成功的健康检查：工坊后端每隔几秒探测一次 /api/health，会刷满日志。失败的照常记录。"""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        args = record.args if isinstance(record.args, tuple) else ()
+        # uvicorn 访问日志的参数：(客户端, 方法, 路径, HTTP 版本, 状态码)
+        if len(args) >= 5 and str(args[2]).startswith("/api/health"):
+            try:
+                return int(args[4]) >= 400
+            except (TypeError, ValueError):
+                return True
+        return True
+
+
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8007)
     ap.add_argument("--model_dir", default="pretrained_models/Fun-CosyVoice3-0.5B")
     ap.add_argument("--fp16", action="store_true")
+    ap.add_argument("--llm", choices=["base", "rl"], default="base", help="CosyVoice3 LLM 权重：base=llm.pt, rl=llm.rl.pt")
     ap.add_argument("--library_dir", default=os.path.join(ROOT, "spk_library"))
     ap.add_argument("--output_dir", default=os.path.join(ROOT, "outputs"))
     a = ap.parse_args()
+    logging.getLogger("uvicorn.access").addFilter(_QuietHealth())
     uvicorn.run(create_app(a), host=a.host, port=a.port)
