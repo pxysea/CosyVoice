@@ -25,6 +25,9 @@ librosa==1.0.0
 openai-whisper==20250625
 pyworld==0.3.5
 onnxruntime-gpu==1.26.0    # 1.27 之前的 PyPI 版按 CUDA 12.8 构建，与 cu128 的 torch 配套
+# 注意：不要同时装 CPU 版 onnxruntime（faster-whisper 等会作为依赖拉进来），它会覆盖 GPU 版导致只剩 CPU 后端。
+# 被拉进来后修复：pip uninstall -y onnxruntime onnxruntime-gpu && pip install --no-deps onnxruntime-gpu==1.26.0
+# 检查：python -c "import onnxruntime as o; print(o.get_available_providers())" 应包含 CUDAExecutionProvider
 
 # ---- 文本前端（缺少时日志会出现 "no frontend is avaliable"）----
 wetext==0.1.8
