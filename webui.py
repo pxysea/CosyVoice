@@ -17,6 +17,7 @@
   - 语音合成: 预训练音色(v1)、3s极速复刻、跨语种复刻、自然语言控制(instruct / instruct2)
   - 音色库: 把 prompt 音频 + 文本保存成命名音色（持久化到磁盘），可列表、试听、删除，合成时直接选用
   - CosyVoice3 前缀自动补全: 'You are a helpful assistant.<|endofprompt|>' 等
+  - CosyVoice3 多音字/指定读音: 文本里写 字{拼音}（如 不亦说{yuè}乎），或维护 polyphone_dict.txt 词典
   - 每次合成自动保存到 outputs/，历史记录可回放，提供下载
   - 语音转换(VC)
   - 随机种子（可固定复现）、调速、流式推理、文本正则化开关
@@ -44,6 +45,7 @@ sys.path.append('{}/third_party/Matcha-TTS'.format(ROOT_DIR))
 from cosyvoice.cli.cosyvoice import AutoModel
 from cosyvoice.utils.file_utils import logging
 from cosyvoice.utils.common import set_all_random_seed
+import polyphone
 
 # ----------------------------------------------------------------------------
 # 常量
@@ -67,6 +69,7 @@ LIB_LOCK = threading.Lock()
 # 运行期全局状态，在 init_runtime() 里赋值
 cosyvoice = None
 MODEL_KIND = 'v1'            # v1 = CosyVoice, v2 = CosyVoice2, v3 = CosyVoice3
+PINYIN_VOCAB = set()         # CosyVoice3 分词器里的拼音 token，用于多音字标注
 SAMPLE_RATE = 22050
 LIB_DIR = ''
 OUT_DIR = ''
@@ -131,6 +134,13 @@ def fix_cross_text(text, auto):
     if auto and MODEL_KIND == 'v3' and END_TAG not in text:
         text = V3_PREFIX + text
     return text
+
+
+def fix_pronunciation(text):
+    """多音字：词典 + 字{拼音} 标注 -> CosyVoice3 拼音 token；其它模型不支持，只去掉标注"""
+    if MODEL_KIND == 'v3' and PINYIN_VOCAB:
+        return polyphone.apply_pinyin(text, PINYIN_VOCAB)
+    return polyphone.strip_marks(text)
 
 
 def fix_instruct_text(text, auto):
@@ -358,6 +368,7 @@ def build_iterator(mode, tts_text, sft_spk, saved_voice, prompt_wav, prompt_text
                    stream, speed, text_frontend, auto_prefix):
     """按模式构造推理迭代器，参数不合法时抛 ValueError。返回 (iterator, 音色标签)"""
     kw = dict(stream=stream, speed=speed, text_frontend=text_frontend)
+    tts_text = fix_pronunciation(tts_text)
 
     if mode == MODE_SFT:
         if not sft_spk:
@@ -495,7 +506,9 @@ def build_ui():
         with gr.Tabs():
             # ---------------- 语音合成 ----------------
             with gr.Tab('语音合成'):
-                tts_text = gr.Textbox(label='输入合成文本', lines=3, value=DEFAULT_TEXT)
+                tts_text = gr.Textbox(label='输入合成文本', lines=3, value=DEFAULT_TEXT,
+                                      info='多音字可指定读音（CosyVoice3）：字{拼音}，如 不亦说{yuè}乎 / 说{yue4}；'
+                                           '常用词可写进 polyphone_dict.txt 自动纠正')
                 with gr.Row():
                     mode = gr.Radio(choices=modes, label='选择推理模式', value=modes[0])
                     instruction_text = gr.Textbox(label='操作步骤', value=instruct_for(modes[0]), lines=3,
@@ -669,12 +682,13 @@ MODEL_DIR = ''
 
 
 def init_runtime(args):
-    global cosyvoice, MODEL_KIND, SAMPLE_RATE, LIB_DIR, OUT_DIR, MODEL_DIR
+    global cosyvoice, MODEL_KIND, SAMPLE_RATE, LIB_DIR, OUT_DIR, MODEL_DIR, PINYIN_VOCAB
     MODEL_DIR = args.model_dir
     cosyvoice = AutoModel(model_dir=args.model_dir, fp16=args.fp16)
     cls = type(cosyvoice).__name__
     MODEL_KIND = {'CosyVoice3': 'v3', 'CosyVoice2': 'v2'}.get(cls, 'v1')
     SAMPLE_RATE = cosyvoice.sample_rate
+    PINYIN_VOCAB = polyphone.pinyin_vocab(cosyvoice.frontend.tokenizer) if MODEL_KIND == 'v3' else set()
     # 音色与模型绑定：按模型目录名分开存放
     LIB_DIR = os.path.join(os.path.abspath(args.library_dir), os.path.basename(os.path.normpath(args.model_dir)))
     OUT_DIR = os.path.abspath(args.output_dir)
