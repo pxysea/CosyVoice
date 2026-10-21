@@ -38,7 +38,8 @@ CosyVoice3 词表含拼音 token（声母 `[y]` + 带调韵母 `[uè]`），用�
 - 在 `build_iterator()` 开头统一处理；非 v3 模型只去掉标注。手动标注优先，词典不跨过已标注的字匹配。
 - 多音字检查：`polyphone.analyze()`（WebUI「多音字检查」、`POST /api/pinyin`）列出常见多音字及来源。
   pypinyin 推测只做提示、**不要自动强制读音**——它会出错（一骑→qí、行人→háng），而模型按上下文通常读对。
-- 验证读音可用 faster-whisper（CPU，`small`，传 numpy 数组；GPU 缺 libcublas.so.12，av 版本不兼容文件输入）：
+- 验证读音/字错率可用 faster-whisper（`large-v3`；传 numpy 数组，av 版本不兼容文件输入；
+  GPU 需 `LD_LIBRARY_PATH=<env>/lib/python3.12/site-packages/nvidia/{cublas,cudnn}/lib`）：
   yuè 会被识别成"跃/悦"，shuō 识别成"说"。
 
 ## 性能结论（RTX 5090，实测）
