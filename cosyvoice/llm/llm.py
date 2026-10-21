@@ -241,15 +241,16 @@ class Qwen2Encoder(torch.nn.Module):
 
     def forward_one_step(self, xs, masks, cache=None):
         # input_masks = masks[:, -1, :]
-        outs = self.model(
+        # 直接调用 Qwen2Model：只需要最后一层 hidden state，跳过每步对全部位置算 lm_head（151936 维）的开销，
+        # 输出与 self.model(..., output_hidden_states=True).hidden_states[-1] 一致
+        outs = self.model.model(
             inputs_embeds=xs,
             attention_mask=None,      # 原来是 masks[:, -1, :]
-            output_hidden_states=True,
             return_dict=True,
             use_cache=True,
             past_key_values=cache,
         )
-        xs = outs.hidden_states[-1]
+        xs = outs.last_hidden_state
         new_cache = outs.past_key_values
         return xs, new_cache
 

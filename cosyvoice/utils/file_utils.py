@@ -74,14 +74,17 @@ def load_wav(wav, target_sr, min_sr=16000):
 def convert_onnx_to_trt(trt_model, trt_kwargs, onnx_model, fp16):
     import tensorrt as trt
     logging.info("Converting onnx to trt...")
-    network_flags = 1 << int(trt.NetworkDefinitionCreationFlag.EXPLICIT_BATCH)
+    # TensorRT >= 10 默认显式 batch，11 起删除了 EXPLICIT_BATCH 与 BuilderFlag.FP16（只支持强类型网络，精度由 onnx 决定）
+    explicit_batch = getattr(trt.NetworkDefinitionCreationFlag, 'EXPLICIT_BATCH', None)
+    network_flags = 1 << int(explicit_batch) if explicit_batch is not None else 0
+    legacy_precision = hasattr(trt.BuilderFlag, 'FP16')
     logger = trt.Logger(trt.Logger.INFO)
     builder = trt.Builder(logger)
     network = builder.create_network(network_flags)
     parser = trt.OnnxParser(network, logger)
     config = builder.create_builder_config()
     config.set_memory_pool_limit(trt.MemoryPoolType.WORKSPACE, 1 << 32)  # 4GB
-    if fp16:
+    if fp16 and legacy_precision:
         config.set_flag(trt.BuilderFlag.FP16)
     profile = builder.create_optimization_profile()
     # load onnx model
@@ -93,14 +96,15 @@ def convert_onnx_to_trt(trt_model, trt_kwargs, onnx_model, fp16):
     # set input shapes
     for i in range(len(trt_kwargs['input_names'])):
         profile.set_shape(trt_kwargs['input_names'][i], trt_kwargs['min_shape'][i], trt_kwargs['opt_shape'][i], trt_kwargs['max_shape'][i])
-    tensor_dtype = trt.DataType.HALF if fp16 else trt.DataType.FLOAT
-    # set input and output data type
-    for i in range(network.num_inputs):
-        input_tensor = network.get_input(i)
-        input_tensor.dtype = tensor_dtype
-    for i in range(network.num_outputs):
-        output_tensor = network.get_output(i)
-        output_tensor.dtype = tensor_dtype
+    if legacy_precision:
+        tensor_dtype = trt.DataType.HALF if fp16 else trt.DataType.FLOAT
+        # set input and output data type
+        for i in range(network.num_inputs):
+            input_tensor = network.get_input(i)
+            input_tensor.dtype = tensor_dtype
+        for i in range(network.num_outputs):
+            output_tensor = network.get_output(i)
+            output_tensor.dtype = tensor_dtype
     config.add_optimization_profile(profile)
     engine_bytes = builder.build_serialized_network(network, config)
     # save trt engine
