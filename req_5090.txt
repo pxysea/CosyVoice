@@ -31,6 +31,7 @@ onnxruntime-gpu==1.26.0    # 1.27 之前的 PyPI 版按 CUDA 12.8 构建，与 c
 
 # ---- 文本前端（缺少时日志会出现 "no frontend is avaliable"）----
 wetext==0.1.8
+pypinyin==0.55.0          # 多音字检查（polyphone.analyze / /api/pinyin），可选
 inflect==7.5.0
 
 # ---- 模型 / 配置 / 框架 ----

@@ -143,6 +143,23 @@ def fix_pronunciation(text):
     return polyphone.strip_marks(text)
 
 
+def check_polyphones(text):
+    """WebUI「检查多音字」：列出文本中的多音字及读音来源，返回 Markdown"""
+    text = (text or '').strip()
+    if not text:
+        return '请先输入合成文本'
+    r = polyphone.analyze(text)
+    tip = '' if MODEL_KIND == 'v3' else '\n\n> 当前模型不是 CosyVoice3，读音标注不会生效。'
+    if not r['items']:
+        return '没有发现常见多音字。' + tip
+    src = {'inline': '✅ 手动标注', 'dict': '✅ 词典', 'guess': '⚠️ 推测，请确认'}
+    rows = ['| # | 字 | 读音 | 来源 | 可选读音 |', '|---|---|---|---|---|']
+    rows += ['| {} | {} | {} | {} | {} |'.format(x['index'] + 1, x['char'], x['reading'], src[x['source']],
+                                                 ' / '.join(x['candidates'])) for x in r['items']]
+    return ('套用词典后：`{}`\n\n'.format(r['text']) + '\n'.join(rows) +
+            '\n\n推测读音仅供参考（模型通常能按上下文读对），读错时在字后写 `{拼音}` 锁定，如 `行{xíng}`。' + tip)
+
+
 def fix_instruct_text(text, auto):
     """instruct 文本：以 <|endofprompt|> 结尾；CosyVoice3 还需要 'You are a helpful assistant. ' 开头"""
     text = (text or '').strip()
@@ -509,6 +526,9 @@ def build_ui():
                 tts_text = gr.Textbox(label='输入合成文本', lines=3, value=DEFAULT_TEXT,
                                       info='多音字可指定读音（CosyVoice3）：字{拼音}，如 不亦说{yuè}乎 / 说{yue4}；'
                                            '常用词可写进 polyphone_dict.txt 自动纠正')
+                with gr.Accordion('多音字检查', open=False):
+                    poly_btn = gr.Button('检查多音字', size='sm')
+                    poly_out = gr.Markdown()
                 with gr.Row():
                     mode = gr.Radio(choices=modes, label='选择推理模式', value=modes[0])
                     instruction_text = gr.Textbox(label='操作步骤', value=instruct_for(modes[0]), lines=3,
@@ -619,6 +639,7 @@ def build_ui():
         refresh_inputs = [saved_dd, lib_dd, vc_saved]
         refresh_outputs = [saved_dd, lib_dd, vc_saved, voice_table]
         refresh_btn.click(refresh_voices, refresh_inputs, refresh_outputs, api_name=False)
+        poly_btn.click(check_polyphones, tts_text, poly_out, api_name=False)
         lib_refresh.click(refresh_voices, refresh_inputs, refresh_outputs, api_name=False)
 
         def after_save(name):

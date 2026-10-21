@@ -27,6 +27,7 @@ from fastapi import APIRouter, FastAPI, File, Form, HTTPException, UploadFile  #
 from fastapi.responses import FileResponse, RedirectResponse, Response  # noqa: E402
 from pydantic import BaseModel  # noqa: E402
 
+import polyphone  # noqa: E402
 import webui as W  # noqa: E402
 
 router = APIRouter(prefix="/api")
@@ -190,6 +191,25 @@ def tts(r: TTSReq):
     return Response(buf.getvalue(), media_type="audio/wav",
                     headers={"X-Seed": str(seed), "X-Duration": f"{len(full) / W.SAMPLE_RATE:.2f}",
                              "X-Sample-Rate": str(W.SAMPLE_RATE)})
+
+
+# ---------------- 多音字 ----------------
+class PinyinReq(BaseModel):
+    text: str
+    use_dict: bool = True
+
+
+@router.post("/pinyin")
+def check_pinyin(r: PinyinReq):
+    """多音字检查（不合成）：返回套用词典后的文本、送入模型的文本，以及每个多音字的读音和来源
+    (inline=手动标注 / dict=词典 / guess=pypinyin 推测，可能有误)。"""
+    res = polyphone.analyze(r.text, use_dict=r.use_dict)
+    try:
+        res["model_text"] = W.fix_pronunciation(res["text"])
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    res["effective"] = W.MODEL_KIND == "v3"
+    return res
 
 
 # ---------------- 启动 ----------------

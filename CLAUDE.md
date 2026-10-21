@@ -8,6 +8,7 @@
   系统默认 `python` 不是这个环境，跑脚本要用全路径。
 - 依赖用 `req_5090.txt`（新栈 torch 2.11 / cu128）；官方 `requirements.txt` 是旧栈，不要用于本机。
 - 文本前端走 `wetext`（没装 `ttsfrd`）。
+- onnxruntime 只能装 `onnxruntime-gpu`；CPU 版（faster-whisper 会拉进来）会覆盖它导致只剩 CPU 后端，修法见 `req_5090.txt`。
 - 主力模型 `pretrained_models/Fun-CosyVoice3-0.5B`；`pretrained_models/`、`outputs/`、`spk_library/` 不入库。
 
 ## 启动
@@ -34,9 +35,20 @@ CosyVoice3 词表含拼音 token（声母 `[y]` + 带调韵母 `[uè]`），用�
   不支持的拼音抛 `ValueError`（WebUI 弹错、API 返回 400）。
 - `polyphone_dict.txt`：每行一个带标注的词句，出现原文即自动套用，长词优先，按 mtime 热加载。
   只收确定无争议的读音；有歧义、依上下文或新旧读音有争议的不要加。
-- 在 `build_iterator()` 开头统一处理；非 v3 模型只去掉标注。
+- 在 `build_iterator()` 开头统一处理；非 v3 模型只去掉标注。手动标注优先，词典不跨过已标注的字匹配。
+- 多音字检查：`polyphone.analyze()`（WebUI「多音字检查」、`POST /api/pinyin`）列出常见多音字及来源。
+  pypinyin 推测只做提示、**不要自动强制读音**——它会出错（一骑→qí、行人→háng），而模型按上下文通常读对。
 - 验证读音可用 faster-whisper（CPU，`small`，传 numpy 数组；GPU 缺 libcublas.so.12，av 版本不兼容文件输入）：
   yuè 会被识别成"跃/悦"，shuō 识别成"说"。
+
+## 性能结论（RTX 5090，实测）
+- RTF ≈ 0.2；LLM 自回归占约 90% 耗时，每 token ~7ms 且受 CPU/kernel launch 限制（GPU 实际只占 ~2ms）。
+- flow 的 TensorRT 无收益（已让转换兼容 TRT 11，但默认不开）；`--fp16` 反而更慢（autocast 开销）。
+- 已做：LLM 单步跳过 lm_head（输出逐位一致，+3~7%）。HF StaticCache + CUDA Graph 试过，
+  fp32 下 SDPA 选到很慢的 mem-efficient kernel，且 transformers 5.x 下有越界断言，放弃。
+  真正提速需要 vLLM（官方支持，但需独立环境，避免破坏 torch 版本）。
+- `--llm rl` 可切 `llm.rl.pt`；自测 CER/SIM 与 base 差异在噪声内，默认 base。
+- 长文本分段（约 80 token 一段）接缝自然（段首尾各有静音、无爆音），无需额外处理。
 
 ## 注意
 - 文本含 `<|` `|>` 时 frontend 会跳过文本正则化（见 `cosyvoice/cli/frontend.py:text_normalize`）。
