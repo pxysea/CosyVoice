@@ -38,7 +38,9 @@ from datetime import datetime
 import numpy as np
 import soundfile as sf
 import torch
-import gradio as gr
+
+os.environ.setdefault('GRADIO_ANALYTICS_ENABLED', 'False')  # 不向外网上报使用统计
+import gradio as gr  # noqa: E402
 
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.append('{}/third_party/Matcha-TTS'.format(ROOT_DIR))
@@ -46,6 +48,9 @@ from cosyvoice.cli.cosyvoice import AutoModel
 from cosyvoice.utils.file_utils import logging
 from cosyvoice.utils.common import set_all_random_seed
 import polyphone
+
+# cosyvoice.utils.file_utils 把根 logger 设成了 DEBUG（训练脚本沿用），服务端只要 INFO，免得 httpx 等刷屏
+logging.getLogger().setLevel(logging.INFO)
 
 # ----------------------------------------------------------------------------
 # 常量

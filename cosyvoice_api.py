@@ -19,6 +19,7 @@ from typing import Literal
 ROOT = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, ROOT)
 
+os.environ.setdefault("GRADIO_ANALYTICS_ENABLED", "False")  # 不向外网上报使用统计
 import gradio as gr  # noqa: E402
 import numpy as np  # noqa: E402
 import soundfile as sf  # noqa: E402

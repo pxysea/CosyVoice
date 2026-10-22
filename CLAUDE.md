@@ -4,9 +4,12 @@
 在官方代码上加了改进版 WebUI、REST API、音色库、多音字处理和 RTX 5090 适配。回复与注释用简体中文。
 
 ## 运行环境
-- conda 环境 `cosyvoice`：`/home/user1/anaconda3/envs/cosyvoice/bin/python`（Python 3.12，CUDA 12.8，RTX 5090）。
-  系统默认 `python` 不是这个环境，跑脚本要用全路径。
-- 依赖用 `req_5090.txt`（新栈 torch 2.11 / cu128）；官方 `requirements.txt` 是旧栈，不要用于本机。
+- conda 环境（系统默认 `python` 不是它们，跑脚本要用全路径 `/home/user1/anaconda3/envs/<env>/bin/python`）：
+  - `cosyvoice-up`：2026-10-22 升级的 CUDA 13 栈（torch 2.14.1+cu130、onnxruntime-gpu 1.31），已通过回归，对应当前 `req_5090.txt`。
+  - `cosyvoice`：旧 CUDA 12.8 栈（torch 2.11+cu128、onnxruntime-gpu 1.26），用户的常驻服务可能仍跑在这里。
+  升级依赖时先 `conda create --clone` 出副本测试，不要直接改正在用的环境。
+- 依赖用 `req_5090.txt`；官方 `requirements.txt` 是旧栈，不要用于本机。
+  torchaudio 已停更（最后 2.11），与 torch 2.14 实测兼容；gradio 限制 pillow<13 等，别越界升级。
 - 文本前端走 `wetext`（没装 `ttsfrd`）。
 - onnxruntime 只能装 `onnxruntime-gpu`；CPU 版（faster-whisper 会拉进来）会覆盖它导致只剩 CPU 后端，修法见 `req_5090.txt`。
 - 主力模型 `pretrained_models/Fun-CosyVoice3-0.5B`；`pretrained_models/`、`outputs/`、`spk_library/` 不入库。
@@ -43,9 +46,11 @@ CosyVoice3 词表含拼音 token（声母 `[y]` + 带调韵母 `[uè]`），用�
   yuè 会被识别成"跃/悦"，shuō 识别成"说"。
 
 ## 性能结论（RTX 5090，实测）
-- RTF ≈ 0.2；LLM 自回归占约 90% 耗时，每 token ~7ms 且受 CPU/kernel launch 限制（GPU 实际只占 ~2ms）。
+- RTF：0.219（最初）→ 0.179（cosyvoice-up + 代码优化）。LLM 自回归占约 90% 耗时，
+  每 token ~5.7ms，受 CPU/kernel launch 限制（GPU 实际只占 ~2ms）。
 - flow 的 TensorRT 无收益（已让转换兼容 TRT 11，但默认不开）；`--fp16` 反而更慢（autocast 开销）。
-- 已做：LLM 单步跳过 lm_head（输出逐位一致，+3~7%）。HF StaticCache + CUDA Graph 试过，
+- 已做（均验证同种子输出逐位一致）：LLM 单步跳过 lm_head（+3~7%）；nucleus/ras 采样向量化，
+  每 token 采样 0.55→0.19ms（+8%）；torch 2.14 本身 +9%。HF StaticCache + CUDA Graph 试过，
   fp32 下 SDPA 选到很慢的 mem-efficient kernel，且 transformers 5.x 下有越界断言，放弃。
   真正提速需要 vLLM（官方支持，但需独立环境，避免破坏 torch 版本）。
 - `--llm rl` 可切 `llm.rl.pt`；自测 CER/SIM 与 base 差异在噪声内，默认 base。

@@ -1,22 +1,24 @@
 # ======================================================================
 # CosyVoice3 (Fun-CosyVoice3-0.5B-2512) —— 新版依赖栈
-# 目标环境: Ubuntu 24 / Python 3.12 / CUDA 12.8 / NVIDIA RTX 5090 (sm_120)
+# 目标环境: Ubuntu 24 / Python 3.12 / CUDA 13.0（驱动 >= 580）/ NVIDIA RTX 5090 (sm_120)
 #
-# 版本取自实际跑通的 cosyvoice 环境（需配合 llm.py 补丁，见安装说明），
-# 仅 onnxruntime-gpu 取 1.23.2（该环境原为 1.21.1，1.23.2 来自另一个正常环境）。
-# 已在 Python 3.12 下用 pip --dry-run 做过依赖解析，无版本冲突。
+# 版本取自实际跑通并做过回归测试的环境（需配合 llm.py 补丁，见安装说明）。
+# 2026-10-22 整体迁移到 CUDA 13：torch 2.14.1+cu130 / onnxruntime-gpu 1.31 / tensorrt cu13，
+# 相比 torch 2.11+cu128 同样输出、RTF 快约 9%（LLM 逐 token 开销降低）。
 # 官方 requirements.txt 是旧栈: torch 2.3.1 / transformers 4.51.3 / numpy 1.26.4。
 # ======================================================================
 
---extra-index-url https://download.pytorch.org/whl/cu128
+--extra-index-url https://download.pytorch.org/whl/cu130
 
 # ---- PyTorch（必须 cu128 及以上构建，Blackwell / RTX 50 系才有 sm_120 kernel）----
-torch==2.11.0+cu128
-torchaudio==2.11.0+cu128
+torch==2.14.1+cu130
+# torchaudio 2.11 是最后一个版本（已停止发布），abi3 构建、未锁定 torch 版本，与 torch 2.14 实测兼容；
+# 推理只用到 kaldi.fbank / Resample / MelSpectrogram
+torchaudio==2.11.0+cu130
 
 # ---- LLM 部分（transformers 5.x 必须打补丁，否则语音内容错误、断续）----
-transformers==5.20.0
-x-transformers==2.31.7
+transformers==5.20.2
+x-transformers==2.31.8
 
 # ---- 音频 / 数值 ----
 numpy==2.5.4
@@ -24,25 +26,25 @@ soundfile==0.14.0
 librosa==1.0.0
 openai-whisper==20250625
 pyworld==0.3.5
-onnxruntime-gpu==1.26.0    # 1.27 之前的 PyPI 版按 CUDA 12.8 构建，与 cu128 的 torch 配套
+onnxruntime-gpu==1.31.0    # 1.27 起 PyPI 版按 CUDA 13 构建，与 cu130 的 torch 配套（cu128 的 torch 需用 1.26.0）
 # 注意：不要同时装 CPU 版 onnxruntime（faster-whisper 等会作为依赖拉进来），它会覆盖 GPU 版导致只剩 CPU 后端。
-# 被拉进来后修复：pip uninstall -y onnxruntime onnxruntime-gpu && pip install --no-deps onnxruntime-gpu==1.26.0
+# 被拉进来后修复：pip uninstall -y onnxruntime onnxruntime-gpu && pip install --no-deps onnxruntime-gpu==1.31.0
 # 检查：python -c "import onnxruntime as o; print(o.get_available_providers())" 应包含 CUDAExecutionProvider
 
 # ---- 文本前端（缺少时日志会出现 "no frontend is avaliable"）----
 wetext==0.1.8
 pypinyin==0.55.0          # 多音字检查（polyphone.analyze / /api/pinyin），可选
-inflect==7.5.0
+inflect==7.6.0
 
 # ---- 模型 / 配置 / 框架 ----
 conformer==0.3.2
 diffusers==0.41.0
 HyperPyYAML==1.2.3
-hydra-core==1.3.2
+hydra-core==1.3.7
 omegaconf==2.3.1
 lightning==2.6.6
 modelscope==1.40.2
-networkx==3.6.1
+networkx==3.7
 matplotlib==3.11.2
 pyarrow==26.0.0
 protobuf==7.36.2
@@ -51,13 +53,14 @@ rich==15.0.0
 gdown==6.4.2
 wget==3.2
 
-# ---- 服务端（runtime/python 的 fastapi / grpc 服务）----
-fastapi==0.143.1
+# ---- 服务端（cosyvoice_api.py / webui.py；runtime/python 的 fastapi / grpc 服务）----
+gradio==6.30.0             # 依赖 pillow<13、tomlkit<0.15、safehttpx<0.2，别手动越界升级
+fastapi==0.159.1
 uvicorn==0.54.0
 grpcio==1.84.0
 
 # ---- 可选，按需取消注释 ----
-# gradio                      # 运行 webui.py 才需要
+# faster-whisper              # 回归测试算 CER 才需要；会拉进 CPU 版 onnxruntime，装完按上面方法修复
 # tensorboard                 # 训练才需要
 # deepspeed                   # 训练才需要
 # onnx                        # 模型导出才需要
